@@ -60,4 +60,9 @@ python eval_model.py --task <task_name> --batch_size <batch_size> --model <adapt
 
 ### Train MeteoRA model
 
-To be completed.
+1. Change file path in `run_meteora_train_fsdp.sh` and `meteora_train.py`.
+
+2. Train MeteoRA model:
+```
+sh run_meteora_train_fsdp.sh
+```
