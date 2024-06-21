@@ -20,6 +20,12 @@ pip install -r requirements.txt
 2. Prepare datasets:
 ```
 cd data
+python create_dataset.py --task all
+```
+
+If you just want to create a specific dataset, run:
+```
+cd data
 python create_dataset.py --task <task_name>
 ```
 3. Prepare *composite-n* tasks:
@@ -42,6 +48,8 @@ For example:
 ```
 python eval_model.py --task composite_10 --batch_size 4 
 ```
+
+**Note:** If you want to run a *composite-n* task, please set a larger *temperature* value (`self.T` in `MoELoRA/layer.py`). As a reference, `15`, `20` and `30` for `n=3`, `n=5` and `n=10`.
 
 Save the evaluation result:
 ```
