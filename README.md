@@ -34,7 +34,10 @@ python create_composite.py --n <n>
 ```
 We prepared `n=3`, `n=5` and `n=10` few-shot dataset generating code. Before generating, please ensure that the sub-tasks to composite *composite-n* task have been included in `data/datasets`.
 
-4. Prepare LoRA adapters checkpoint and MeteoRA model checkpoint. You can download ours([LlaMA2](https://huggingface.co/hDPQ4gi9BG/MeteoRA_llama2_13b) and [LlaMA3](https://huggingface.co/hDPQ4gi9BG/MeteoRA_llama3_8b) as base model) or train by yourself.
+4. Prepare LoRA adapters checkpoint and MeteoRA model checkpoint. You can train by yourself or download ours([LlaMA2](https://huggingface.co/hDPQ4gi9BG/MeteoRA_llama2_13b) and [LlaMA3](https://huggingface.co/hDPQ4gi9BG/MeteoRA_llama3_8b) as base model) by:
+```
+python download_ckpt.py
+```
 5. Change file path in `configs/config.yaml`.
 
 ### Evaluation
