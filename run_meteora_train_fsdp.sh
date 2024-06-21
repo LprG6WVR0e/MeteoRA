@@ -1,3 +1,5 @@
+export MOELINEAR_USE_ACCELERATE_FWD=0
+
 accelerate launch --num_processes=4 --config_file "configs/fsdp_config.yaml" meteora_train.py \
 --model_name "" \
 --tasks_datasets_prefix "" \

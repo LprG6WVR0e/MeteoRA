@@ -5,6 +5,7 @@ import datasets
 from typing import List, Dict, Any
 from functools import partial
 import copy
+import yaml
 
 from transformers import (
     TrainerCallback,
@@ -537,3 +538,12 @@ def load_meteora_model(base_model_path, adapter_dir, meteora_ckpt_path):
     meteora_model.load_state_dict(state_dict['model'])
 
     return meteora_model, tokenizer
+
+def load_config():
+    with open(os.path.join('configs', 'config.yaml')) as f:
+        try:
+            config = yaml.safe_load(f)
+        except:
+            print("Error loading config file")
+            return None
+    return config
