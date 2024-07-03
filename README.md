@@ -17,7 +17,9 @@ This is the implementation of the paper "MeteoRA: Multiple-tasks Embedded LoRA f
 ```
 pip install -r requirements.txt
 ```
-2. Prepare datasets:
+2. Download all JSON format BIG-bench benchmarks, please refer to [here](https://huggingface.co/datasets/google/bigbench).
+3. Change `bigbench_dataset_dir` path in `configs/config.yaml`.
+4. Prepare datasets:
 ```
 cd data
 python create_dataset.py --task all
@@ -28,17 +30,22 @@ If you just want to create a specific dataset, run:
 cd data
 python create_dataset.py --task <task_name>
 ```
-3. Prepare *composite-n* tasks:
+5. Prepare *composite-n* tasks:
 ```
 python create_composite.py --n <n>
 ```
 We prepared `n=3`, `n=5` and `n=10` few-shot dataset generating code. Before generating, please ensure that the sub-tasks to composite *composite-n* task have been included in `data/datasets`.
 
-4. Prepare LoRA adapters checkpoint and MeteoRA model checkpoint. You can train by yourself or download ours([LlaMA2](https://huggingface.co/hDPQ4gi9BG/MeteoRA_llama2_13b) and [LlaMA3](https://huggingface.co/hDPQ4gi9BG/MeteoRA_llama3_8b) as base model) by:
+6. Prepare LoRA adapters checkpoint and MeteoRA model checkpoint. You can train by yourself or download ours([LlaMA2](https://huggingface.co/hDPQ4gi9BG/MeteoRA_llama2_13b) and [LlaMA3](https://huggingface.co/hDPQ4gi9BG/MeteoRA_llama3_8b) as base model) by:
 ```
 python download_ckpt.py
 ```
-5. Change file path in `configs/config.yaml`.
+7. Change other paths in `configs/config.yaml`. Example:
+```yaml
+base_model_path: 'meta-llama3/Meta-Llama-3-8B'
+meteora_ckpt_path: 'ckpt/llama3_8b/llama3_8b_meteora/top_2'
+adapter_dir: 'ckpt/llama3_8b/llama3_8b_peft'
+```
 
 ### Evaluation
 
@@ -71,9 +78,21 @@ python eval_model.py --task <task_name> --batch_size <batch_size> --model <adapt
 
 ### Train MeteoRA model
 
-1. Change file path in `run_meteora_train_fsdp.sh`.
+1. Prepare LoRA adapters and corresponding datasets in JSONL format. Ensure each LoRA adapter has a corresponding dataset. Place all LoRA adapters and datasets in their respective folders with matching subfolder names:
+      ```
+      - lora_adapters
+            - adapter_name1
+            - adapter_name2
+            - ...
+      - datasets
+            - dataset_name1
+            - dataset_name2
+            - ...
+      ```
 
-2. Train MeteoRA model:
+2. Change file paths in `run_meteora_train_fsdp.sh`.
+
+3. Train MeteoRA model:
 ```
 sh run_meteora_train_fsdp.sh
 ```
