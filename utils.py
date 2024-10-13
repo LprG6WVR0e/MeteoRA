@@ -52,8 +52,6 @@ def tokenize_dataset(input: Dict[str, str], tokenizer, max_length=None, task_ind
         )
         input_ids += msg_tokenized['input_ids']
         attention_mask += msg_tokenized['attention_mask']
-        # labels += [IGNORE_INDEX] * len(msg_tokenized['input_ids']) if key == "prompt" else msg_tokenized['input_ids']
-        # gate_labels += [IGNORE_INDEX] * len(msg_tokenized['input_ids']) if key == "prompt" else [data_index] * len(msg_tokenized['input_ids'])        
         labels += msg_tokenized['input_ids'] if key == "prompt" else msg_tokenized['input_ids']
         gate_labels += [task_index] * len(msg_tokenized['input_ids']) if key == "prompt" else [task_index] * len(msg_tokenized['input_ids'])        
     final_labels = [labels, gate_labels]
@@ -82,8 +80,6 @@ def collate_dataset(samples: List[Dict[str, Any]], tokenizer) -> Dict[str, Any]:
         warnings.warn(f"The max length of a single sample is {max_len}, which exceeds the maximum sequence length of 4096.")
         max_len_clip = 4096
 
-    # print([len(s['input_ids']) for s in samples])
-    # print(max_len)
     batch_samples = {
         "input_ids": [],
         "attention_mask": [],
@@ -96,11 +92,7 @@ def collate_dataset(samples: List[Dict[str, Any]], tokenizer) -> Dict[str, Any]:
         "labels": IGNORE_INDEX # append with -100 to ignore them during loss calculation
     }
     for sample in samples:
-        # if max_len > max_len_clip:
-        #     sample = sample[:]
-        # print(max_len,len(sample['input_ids']))
         pad_len = max_len - len(sample['input_ids'])
-        # padding each sample to align with the longest one
         for k in sample:
             if k == "labels":
                 batch_samples[k].append([sample[k][0] + [pad_elems[k]] * pad_len, sample[k][1] + [pad_elems[k]] * pad_len])
@@ -108,13 +100,7 @@ def collate_dataset(samples: List[Dict[str, Any]], tokenizer) -> Dict[str, Any]:
                 batch_samples[k].append(
                     sample[k] + [pad_elems[k]] * pad_len
                 )
-            # print(len(batch_samples['input_ids'][k]), len(batch_samples['attention_mask'][k]), len(batch_samples['labels'][k][0]), len(batch_samples['labels'][k][1]))
-    # the dtype should be torch.long or torch.int64, but it is not necessary since the default dtype for a int list is just int64
-    # print(len(batch_samples['input_ids'][0]), len(batch_samples['input_ids'][1]), len(batch_samples['labels'][0][1]), len(batch_samples['labels'][1][1]))
-    # print(max_len)
     batch = {k: torch.tensor(v, dtype=torch.long)  for k,v in batch_samples.items()} 
-    # print(batch["input_ids"].size(), batch["labels"].size())
-    # print(batch["attention_mask"])
     return batch
 
 class SaveDeepSpeedPeftModelCallback(TrainerCallback):
@@ -282,16 +268,6 @@ def create_bbl_united_dataset(tasks, tokenizer, max_length, default_task):
     merged_dataset = shuffled_train_dataset.train_test_split(test_size=0.1)
     print("dataset is loaded, train:", merged_dataset["train"], "\ntest:", merged_dataset["test"], merged_dataset)
     return merged_dataset["train"], merged_dataset["test"]
-    # merged_test_dataset = datasets.concatenate_datasets(tests)
-    # merged_train_dataset = datasets.concatenate_datasets([gsm8k_dataset['train'], sqlctx_dataset['train'], viggo_dataset['train']])
-    # merged_test_dataset = datasets.concatenate_datasets([gsm8k_dataset['test'], sqlctx_dataset['test'], viggo_dataset['test']])
-
-    # print("dataset is loaded, train:", shuffled_train_dataset, "test:", merged_test_dataset)
-    # merged_train_dataset = tokenize_datasets(merged_train_dataset, tokenizer, max_length, "train")
-    # merged_test_dataset = tokenize_datasets(merged_test_dataset, tokenizer, max_length, "test")
-    
-    # return shuffled_train_dataset, merged_test_dataset
-
 
 def load_model_and_tokenizer(model_path, tasks_datasets_prefix, lora_path_prefix, default_task="alpaca"):
     tokenizer = AutoTokenizer.from_pretrained(model_path)
@@ -301,10 +277,8 @@ def load_model_and_tokenizer(model_path, tasks_datasets_prefix, lora_path_prefix
                                                           attn_implementation="flash_attention_2"
                                                           )
     
-    # tasks_datasets_prefix = task_path
     tasks = get_dataset_name_from_tasks_path(tasks_datasets_prefix)
     default_task = "alpaca"
-    # tasks.append(default_task)
     ADAPTERS = { "lora" + str(index+1):
                 lora_path_prefix + task + "_no_sys" for index, task in enumerate(tasks) }
 
@@ -532,6 +506,73 @@ def load_meteora_model(base_model_path, adapter_dir, meteora_ckpt_path):
     meteora_model.load_state_dict(state_dict)
 
     return meteora_model, tokenizer
+
+def load_baseline(baseline, base_model_path, tasks, adapter_dir):
+    if baseline == 'arrow':
+        return load_arrow_model(base_model_path, tasks, adapter_dir)
+    tokenizer = AutoTokenizer.from_pretrained(base_model_path)
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = 'left'
+
+    base_model = LlamaMeteorForCausalLM.from_pretrained(base_model_path, 
+                                                          device_map='auto', 
+                                                          torch_dtype=torch.bfloat16, 
+                                                          attn_implementation="flash_attention_2"
+                                                          )
+    peft_model = base_model
+    for task in tasks:
+        adapter = os.path.join(adapter_dir, task)
+        if peft_model is not PeftModel:
+            peft_model = PeftModel.from_pretrained(base_model, 
+                                                model_id=adapter,
+                                                adapter_name=task, 
+                                                torch_dtype=torch.bfloat16, 
+                                                attn_implementation="flash_attention_2", 
+                                                is_trainable=False)
+        else:
+            peft_model.load_adapter(model_id=adapter, adapter_name=task, is_trainable=False)
+    # check baseline
+    adapters = tasks
+    if baseline == 'avg_merge':
+        weights = [1.0 / len(tasks)] * len(tasks)
+        adapter_name = 'avg_merge'
+        peft_model.add_weighted_adapter(adapters=adapters, weights=weights, adapter_name=adapter_name)
+    elif baseline == 'ties':
+        weights = [1.0] * len(tasks)
+        adapter_name = 'ties'
+        peft_model.add_weighted_adapter(adapters, weights, adapter_name, combination_type="ties", density=0.5)
+    elif baseline == 'dare':
+        weights = [1.0] * len(tasks)
+        adapter_name = 'dare_ties'
+        peft_model.add_weighted_adapter(adapters, weights, adapter_name, combination_type="dare", density=0.6)
+    else:
+        raise ValueError("Baseline not found")
+    peft_model.set_adapter(adapter_name)
+    return peft_model, tokenizer
+
+def load_arrow_model(base_model_path, tasks, adapter_dir):
+    from arrow.peft_model import PeftModel as ArrowPeftModel
+    tokenizer = AutoTokenizer.from_pretrained(base_model_path)
+    tokenizer.pad_token = tokenizer.eos_token
+    tokenizer.padding_side = 'left'
+    base_model = LlamaForCausalLM.from_pretrained(base_model_path,
+                                                    device_map="auto",
+                                                    torch_dtype=torch.bfloat16,
+                                                    attn_implementation="flash_attention_2"
+                                                    )
+    peft_model = base_model
+    for task in tasks:
+        adapter = os.path.join(adapter_dir, task)
+        if peft_model is not PeftModel:
+            peft_model = ArrowPeftModel.from_pretrained(base_model, 
+                                                model_id=adapter,
+                                                adapter_name=task, 
+                                                torch_dtype=torch.bfloat16, 
+                                                attn_implementation="flash_attention_2", 
+                                                is_trainable=False)
+        else:
+            peft_model.load_adapter(model_id=adapter, adapter_name=task, is_trainable=False)
+    return peft_model, tokenizer, adapter
 
 def load_config():
     with open(os.path.join('configs', 'config.yaml')) as f:

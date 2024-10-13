@@ -241,9 +241,13 @@ if __name__ == '__main__':
         result['meteora_ckpt_path'] = meteora_ckpt_path
         model, tokenizer = utils.load_meteora_model(base_model_path, adapter_dir, meteora_ckpt_path)
     # PEFT
-    else:
+    elif args.model in task_set['tasks']:
         adapter_path = os.path.join(adapter_dir, task_name)
         model, tokenizer = utils.load_peft_model(base_model_path, adapter_path)
+    # Other baselines
+    else:
+        tasks = list(task_set['tasks'])
+        model, tokenizer = utils.load_baseline(args.model, base_model_path, tasks, adapter_dir)
 
     # debug mode
     if args.debug:
